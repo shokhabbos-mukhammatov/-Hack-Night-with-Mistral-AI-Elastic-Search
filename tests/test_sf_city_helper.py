@@ -17,12 +17,12 @@ def test_resource_text_contains_core_fields():
         neighborhood="Mission",
         address="2450 Harrison St",
         description="Family programs and recreation center",
-        url="https://example.org",
+        url="https://sf.gov/resource",
     )
     text = resource_text(resource)
     assert "Mission Playground" in text
     assert "Public spaces" in text
-    assert "https://example.org" in text
+    assert "https://sf.gov/resource" in text
 
 
 def test_build_hybrid_query_without_embedding():

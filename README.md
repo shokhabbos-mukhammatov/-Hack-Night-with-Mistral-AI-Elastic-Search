@@ -66,25 +66,50 @@ worker ──polls──▶ SF Open311 · NWS · NOAA · Open-Meteo · CHP · Da
                                                                    └─▶ Mistral (narration, Q&A tools, vision, OCR, Voxtral, moderation)
 ```
 
-- **Elasticsearch** features used:
-  - `geo_shape` and `geo_distance` queries
-  - a **geo_match enrich** ingest pipeline that tags every 311 report with its flood zone and neighborhood
-  - a **percolator** for alert subscriptions
-  - **ES|QL** block history
-  - a continuous **transform** (reports per cell per hour)
-  - **`_mvt` vector tiles** for the map
-  - **RRF hybrid retrieval** (BM25 + `semantic_text` through a **Mistral inference endpoint**)
-  - `search_as_you_type` geocoding over the city's own 245k addresses and intersections
-- **Mistral** features used:
-  - function-calling agent with read-only tools
-  - structured outputs (Pydantic)
-  - vision for photo triage
-  - OCR for SFPUC PDFs
-  - Voxtral transcription and TTS
-  - moderation
-  - Batch
-  - `mistral-embed` via Elastic
-- **Code style:** a functional core (`risk.assess` is a pure function) with three small typed seams: `InputsProvider`, `Source` and `Channel`.
+**Code style:** a functional core (`risk.assess` is a pure function) with three small typed seams: `InputsProvider`, `Source` and `Channel`.
+
+### How HighGround uses Elastic
+
+All of these are verified on Elasticsearch/Kibana 9.5.6 with real data unless marked *(needs ML/EIS)*.
+
+| Capability | Where it's used |
+|---|---|
+| **Ingest pipeline + `geo_match` enrich** | Every 311 report is tagged with its flood zone, sea-level-rise zone and neighborhood at ingest time |
+| **`geo_shape` / `geo_distance`** | Point-in-zone checks, and hazards near you |
+| **`search_as_you_type` + fuzzy matching** | Geocoder over the city's 245k addresses and intersections ("Folsom y 17th", typos) |
+| **ES\|QL** | Block storm history |
+| **ES\|QL `LOOKUP JOIN`** | Ops hotspots: recent reports × the block's flood zone and storm history, joined from a lookup-mode index |
+| **ES\|QL `COMPLETION`** | Neighborhood summaries written by Mistral inside the query (`mistral-completion` endpoint) |
+| **`significant_terms`** | "Unusual right now": neighborhoods and report types over-represented compared with the last 30 days |
+| **Continuous transform** | Reports per H3 cell per hour |
+| **Percolator** | Alert subscriptions: each new hazard is matched against stored geo queries |
+| **Vector tiles `_mvt`** | Map layers for points, risk cells and zones, plus **geohex aggregation tiles** for density |
+| **Retrievers** | Guide search: `rule` → `text_similarity_reranker` *(Elastic Rerank, needs ML/EIS)* → `rrf` (BM25 + `semantic_text`) |
+| **Synonyms API** | Updateable multilingual flood vocabulary, so "sandbags" = "sacos de arena" = "沙包" even without embeddings |
+| **Query rules** | Emergency questions always pin the "call 911 / report to 311" guidance first, in the reader's language |
+| **Inference API** | Mistral `text_embedding` (`semantic_text`), `chat_completion` and `completion` endpoints. Falls back to Elastic's multilingual E5 *(needs ML/EIS)*. |
+| **Data streams + lifecycle** | Request logs (30-day retention) and risk history (400 days) |
+| **Agent Builder + MCP** | 5 HighGround ES\|QL tools registered in Kibana (`scripts/agent_builder.py`) and served over Kibana's MCP server. The Mistral agent calls them through the Mistral SDK's MCP client (verified end to end). |
+
+### How HighGround uses Mistral
+
+Every path below is written against the official SDK. The ones marked † are unit-tested with a fake client and need a real key to verify.
+
+| Capability | Where it's used |
+|---|---|
+| **Agents API** † | A persistent "HighGround SF" agent with our read-only ES tools, the built-in **`web_search`** (for live facts like a road closure, with cited sources) and **moderation guardrails** |
+| **Conversations API** † | Memory per thread (web chat, Telegram, iMessage), so follow-ups like "and tonight?" keep context |
+| **MCP** | The agent also gets Elastic Agent Builder tools over MCP (`elastic_highground_*`) |
+| **Structured outputs** † | Briefings, 311 drafts, photo checks, report classification, signal extraction |
+| **Vision** † | Triage of residents' photos, plus checking photos attached to live 311 reports (SSRF-allowlisted). Verified water weighs 1.5× in the risk engine. |
+| **Mistral Small classification** † | Open311 lumps flooding, sewage and leaks into one category, so Mistral reads the description and sets it (category ids it invents are rejected) |
+| **OCR** † | SFPUC PDFs (flood insurance guide) into the guides index, with page citations |
+| **Voxtral** † | Voice questions and reports (transcription), and read-aloud (TTS) with a browser fallback |
+| **Moderation** † | All user text and photos |
+| **Batch API** † | Pre-translates every fallback text into 9 languages (`python -m highground.i18n submit`) for when live Mistral is down |
+| **Embeddings** † | `mistral-embed` through the Elastic inference endpoint for `semantic_text` |
+
+Every Mistral output goes through `verify.py`: a sentence with a number that isn't in the tool data is dropped. Answers backed by `web_search` keep their citations and are labeled.
 
 ## Run it locally
 
@@ -104,8 +129,11 @@ python -m highground.ingest backfill --years 5
 python -m highground.ingest poll         # one pass of every live feed
 python -m highground.ingest transform
 python -m highground.ingest profiles     # per-cell susceptibility
-python -m highground.ingest guides       # curated guides (+ Mistral OCR of PDFs, + Apify crawl if a token is set)
+python -m highground.ingest guides       # curated guides, synonyms, query rules (+ Mistral OCR of PDFs, + Apify crawl)
+python scripts/agent_builder.py          # optional: Kibana Agent Builder ES|QL tools + MCP (HG_KIBANA_URL)
 ```
+
+After upgrading, `python -m highground.ingest migrate` rebuilds the derived indices whose settings changed.
 
 Then start the app and the worker:
 
@@ -142,8 +170,10 @@ python -m highground.replay publish 2022-12-31
    - Photon: `HG_PHOTON_PROJECT_ID` and `HG_PHOTON_API_KEY`
    - Web Push: run `python -m highground.messaging.webpush --generate` for `HG_VAPID_*`
    - optional: `HG_APIFY_TOKEN`, and `HG_OPEN311_API_KEY` once SF311 issues one
+   - Agent Builder: `HG_KIBANA_URL` (the Serverless project's Kibana URL) and `HG_KIBANA_API_KEY`
 4. Run the ingest commands above once against the Cloud project, using a one-off Railway shell or your laptop.
-5. Run `python scripts/smoke.py https://<web>.up.railway.app`, then check `/status`.
+5. Run `python scripts/agent_builder.py` once against the project's Kibana.
+6. Run `python scripts/smoke.py https://<web>.up.railway.app`, then check `/status` and `/ops`.
 
 Still pending on outside parties:
 - **SF311 Open311 POST key:** request one at mobile311.sfgov.org/open311. Until then, reports hand off to sf311.org.

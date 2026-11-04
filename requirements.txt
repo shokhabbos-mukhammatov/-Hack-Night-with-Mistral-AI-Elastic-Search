@@ -11,3 +11,4 @@ cryptography>=46
 pywebpush>=2.1,<3
 python-socketio[client]>=5.14,<6
 python-multipart>=0.0.20
+mcp>=2.2,<3

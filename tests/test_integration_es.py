@@ -143,3 +143,69 @@ def test_live_risk_loop_writes_cells(es):
     doc = es.client.get(index=es.ix("risk-cells"), id=c)["_source"]
     assert doc["level"] in ("low", "elevated", "high", "severe") and doc["polygon"]["type"] == "Polygon"
     assert riskloop.run_once(es)["changed"] == 0, "a stable level is not re-reported"
+
+
+def test_ops_lookup_join_significant_terms_and_esql_stats(es):
+    from highground import ops
+
+    es.upsert_docs("hazard-reports", [report(str(9100 + i), *FOLSOM, 5 + i) for i in range(4)], "reports-enrich", merge_case, refresh="wait_for")
+    c = cell_of(*FOLSOM)
+    lat, lon = cell_center(c)
+    es.upsert_docs("cell-profiles", [{"_id": c, "cell": c, "h3_9": c, "in_100yr": True, "storm_reports_5y": 30, "storm_days_5y": 12, "centroid": {"lat": lat, "lon": lon}, "neighborhood": "Mission"}], refresh="wait_for")  # fmt: skip
+    hot = ops.hotspots(es, hours=6)
+    top = next(r for r in hot if r["h3_9"] == c)
+    assert top["in_100yr"] is True and top["storm_reports_5y"] == 30, "joined from the lookup index"
+    assert top["priority"] == round(top["reports"] * (2.0 + 30 / 20.0), 2)
+    n = ops.neighborhood(es, "Mission", hours=6)
+    assert n["flooding"] >= 4 and n["summary_by"] == "template"
+    u = ops.unusual(es, hours=6)
+    assert "neighborhoods" in u and "categories" in u
+
+
+def test_synonyms_and_query_rules_on_guides(es):
+    from highground import guides
+
+    docs = [
+        {"_id": "g-es", "url": "u1", "lang": "es", "title": "Sacos de arena gratis", "section": "Sacos de arena gratis", "body": "Hasta 10 sacos de arena gratis.", "content": "x"},
+        {"_id": "g-en", "url": "u2", "lang": "en", "title": "Report flooding", "section": "Report flooding", "body": "Call 911 if someone is in danger.", "content": "x"},
+        {"_id": "g-x", "url": "u3", "lang": "en", "title": "Flood insurance", "section": "Flood insurance", "body": "danger danger danger emergency emergency", "content": "x"},
+    ]
+    es.upsert_docs("guides", docs, refresh="wait_for")
+    from highground.es import ensure_query_rules
+
+    assert ensure_query_rules(es, {"en": ["g-en"]})
+    guides._features = None
+    hit = guides.search(es, "sandbags", "en", 3)
+    assert hit and hit[0]["title"] == "Sacos de arena gratis", "English query finds Spanish page through the synonyms set"
+    pinned = guides.search(es, "emergency, someone is trapped", "en", 3)
+    assert pinned[0]["title"] == "Report flooding", "query rule pins the 911 guidance first"
+    guides._features = None
+
+
+def test_data_streams_with_retention(es):
+    ds = {d["name"]: d for d in es.client.indices.get_data_stream(name=es.ix("*"))["data_streams"]}
+    assert ds[es.ix("logs")]["lifecycle"]["data_retention"] == "30d"
+    assert es.upsert_docs("logs", [{"_id": "l1", "@timestamp": "2026-11-04T00:00:00Z", "event": "http", "route": "/x", "status": 200, "ms": 1.0}]) == 1
+
+
+def test_llm_classification_ignores_invented_ids(es, monkeypatch):
+    from types import SimpleNamespace as NS
+
+    from highground import enrich_llm
+
+    es.upsert_docs("hazard-reports", [report("9200", *FOLSOM, 3, desc="Storm drain backing up, water across the whole intersection")],
+                   "reports-enrich", merge_case, refresh="wait_for")  # fmt: skip
+
+    class Fake:
+        enabled = True
+        cfg = NS(model_small="s", model_large="l")
+
+        def parse(self, messages, schema, **kw):
+            return schema(items=[{"id": "311:9200", "category": "flooding", "confidence": 0.9},
+                                 {"id": "311:INVENTED", "category": "flooding", "confidence": 0.99}])  # fmt: skip
+
+    monkeypatch.setattr(enrich_llm, "mistral", lambda: Fake())
+    assert enrich_llm.classify_reports(es) == 1
+    doc = es.client.get(index=es.ix("hazard-reports"), id="311:9200")["_source"]
+    assert doc["category_source"] == "mistral" and doc["category"] == "flooding" and doc["llm_checked_at"]
+    assert not es.client.exists(index=es.ix("hazard-reports"), id="311:INVENTED")

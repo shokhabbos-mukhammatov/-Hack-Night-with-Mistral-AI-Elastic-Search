@@ -85,8 +85,19 @@ def ocr_docs() -> list[dict]:
     return docs
 
 
+EMERGENCY_SECTIONS = ("Report flooding", "Reportar inundaciones", "報告水浸", "Flooded streets", "Calles inundadas", "水浸街道")
+
+
 def load_guides(es: ES, local_only: bool = False) -> dict:
-    out = {"local": es.upsert_docs("guides", local_docs(), refresh="wait_for")}
+    from highground.es import ensure_query_rules
+
+    docs = local_docs()
+    out = {"local": es.upsert_docs("guides", docs, refresh="wait_for")}
+    pinned: dict[str, list[str]] = {}
+    for d in docs:
+        if d["section"].startswith(EMERGENCY_SECTIONS):
+            pinned.setdefault(d["lang"], []).append(d["_id"])
+    out["query_rules"] = ensure_query_rules(es, pinned) if pinned else False
     out["pdf"] = es.upsert_docs("guides", ocr_docs())
     cfg = settings()
     if not local_only and cfg.apify_token:
@@ -110,33 +121,63 @@ def ingest_apify_dataset(es: ES, dataset_id: str, kind: str) -> int:
     return 0
 
 
-def q_search(query: str, lang: str, k: int, semantic: bool) -> dict:
+def q_search(query: str, lang: str, k: int, semantic: bool, rerank_id: str | None = None, ruleset_id: str | None = None) -> dict:
+    """Retriever tree: [query rules] -> [Elastic Rerank] -> RRF(BM25 with multilingual synonyms, semantic_text)."""
     lexical = {
         "standard": {
             "query": {
                 "bool": {
                     "must": {"multi_match": {"query": query, "fields": ["title^2", "section^2", "body"]}},
-                    "should": [{"term": {"lang": {"value": lang, "boost": 2}}}],
+                    # strong preference for the reader's language; synonyms still bridge languages when needed
+                    "should": [{"term": {"lang": {"value": lang, "boost": 25}}}],
                 }
             }
         }
     }
-    if not semantic:
-        return {"size": k, "retriever": lexical, "_source": ["url", "title", "body", "lang", "source_type", "page"]}
-    return {
-        "size": k,
-        "retriever": {
+    src = ["url", "title", "body", "lang", "source_type", "page"]
+    if semantic:
+        retriever = {
             "rrf": {
                 "retrievers": [lexical, {"standard": {"query": {"semantic": {"field": "content", "query": query}}}}],
                 "rank_window_size": 50,
                 "rank_constant": 20,
             }
-        },
-        "_source": ["url", "title", "body", "lang", "source_type", "page"],
-    }
+        }
+    else:
+        retriever = lexical
+    if rerank_id:
+        retriever = {
+            "text_similarity_reranker": {
+                "retriever": retriever, "field": "body", "inference_id": rerank_id, "inference_text": query, "rank_window_size": 20,
+            }
+        }  # fmt: skip
+    if ruleset_id:
+        retriever = {"rule": {"retriever": retriever, "ruleset_ids": [ruleset_id], "match_criteria": {"query_string": query, "lang": lang}}}
+    return {"size": k, "retriever": retriever, "_source": src}
 
 
 _semantic: bool | None = None
+_features: dict | None = None
+
+
+def search_features(es: ES) -> dict:
+    """Which optional retrieval layers work on this cluster (checked once per process)."""
+    global _features
+    if _features is None:
+        from highground.es import QUERY_RULESET, RERANK_ENDPOINT, inference_works
+
+        rules = False
+        try:
+            es.client.query_rules.get_ruleset(ruleset_id=es.ix(QUERY_RULESET))
+            rules = True
+        except Exception:  # noqa: BLE001
+            pass
+        _features = {
+            "semantic": semantic_enabled(es),
+            "rerank": RERANK_ENDPOINT if inference_works(es, RERANK_ENDPOINT, "rerank") else None,
+            "rules": es.ix(QUERY_RULESET) if rules else None,
+        }
+    return _features
 
 
 def semantic_enabled(es: ES) -> bool:
@@ -154,10 +195,10 @@ def semantic_enabled(es: ES) -> bool:
 def search(es: ES, query: str, lang: str = "en", k: int = 4) -> list[dict]:
     if not query.strip():
         return []
-    sem = semantic_enabled(es)
+    f = search_features(es)
     try:
-        res = es.search("guides", **q_search(query, lang, k, sem))
-    except Exception as exc:  # noqa: BLE001 - RRF may be unavailable on some licenses: retry lexical only
+        res = es.search("guides", **q_search(query, lang, k, f["semantic"], f["rerank"], f["rules"]))
+    except Exception as exc:  # noqa: BLE001 - any optional layer failing -> plain BM25 + synonyms
         log.info("guide search fallback to BM25: %s", exc)
         res = es.search("guides", **q_search(query, lang, k, False))
     return [

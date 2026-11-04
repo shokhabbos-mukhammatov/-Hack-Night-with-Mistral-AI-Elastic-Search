@@ -24,7 +24,16 @@ DISCLAIMER = (
 )
 
 
-def actions_for(state: RiskState, zone: ZoneInfo) -> list[Action]:
+def actions_for(state: RiskState, zone: ZoneInfo, lang: str = "en") -> list[Action]:
+    acts = _actions_en(state, zone)
+    if _base_lang(lang) == "en":
+        return acts
+    from highground.i18n import tr
+
+    return [a.model_copy(update={"text": tr(lang, f"action.{a.code}", a.text)}) for a in acts]
+
+
+def _actions_en(state: RiskState, zone: ZoneInfo) -> list[Action]:
     codes = {r.code for r in state.reasons}
     lvl = state.level
     out: list[Action] = []
@@ -149,7 +158,9 @@ def template_narrative(state: RiskState, actions: list[Action], lang: str = "en"
     why, todo, calm = _LABELS.get(_base_lang(lang), _LABELS["en"])
     lines = [headline(state.level, lang)]
     if state.reasons:
-        lines.append(f"{why}: " + " ".join(r.text for r in state.reasons[:5]))
+        from highground.i18n import tr
+
+        lines.append(f"{why}: " + " ".join(tr(lang, f"reason.{r.code}", r.text) for r in state.reasons[:5]))
     else:
         lines.append(f"{why}: {calm}")
     top = [a.text for a in actions[:3]]

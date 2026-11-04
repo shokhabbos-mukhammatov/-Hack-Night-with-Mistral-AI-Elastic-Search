@@ -22,7 +22,7 @@ def build_briefing(es: ES, lat: float, lon: float, lang: str = "en", label: str 
     state = assess(inputs)
     point_zone = tools.zone_at(es, lat, lon)
     zone = inputs.profile.zone.model_copy(update={"in_100yr": inputs.profile.zone.in_100yr or point_zone["in_100yr"]})
-    actions = fallback.actions_for(state, zone)
+    actions = fallback.actions_for(state, zone, lang)
     history = tools.block_history(es, lat, lon)
     conditions = {
         "weather": inputs.weather.model_dump(mode="json") if inputs.weather else None,

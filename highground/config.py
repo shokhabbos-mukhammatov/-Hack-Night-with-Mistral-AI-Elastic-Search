@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     vapid_private_key: str = ""
     vapid_subject: str = "mailto:ops@example.com"
 
+    # Kibana (Elastic Agent Builder: ES|QL tools over MCP for the Mistral agent; Kibana dashboards)
+    kibana_url: str = ""
+    kibana_api_key: str = ""
+
     # SF311
     open311_api_key: str = ""
 

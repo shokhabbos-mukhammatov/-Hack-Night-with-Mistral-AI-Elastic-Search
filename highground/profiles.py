@@ -144,6 +144,7 @@ def build_profiles(es: ES, as_of: datetime | None = None) -> dict:
             {
                 "_id": c,
                 "cell": c,
+                "h3_9": c,
                 "in_100yr": p.zone.in_100yr,
                 "slr24": p.zone.slr24,
                 "shoreline": p.zone.shoreline,

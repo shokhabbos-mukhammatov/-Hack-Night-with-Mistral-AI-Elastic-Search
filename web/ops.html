@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HighGround Ops</title>
+  <meta name="description" content="Live flood operations view for San Francisco: hotspots, unusual activity, neighborhood summaries.">
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    .ops { max-width: 1100px; margin: 0 auto; padding: 16px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+    table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+    th { font-weight: 600; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .pill { display: inline-block; padding: 0 8px; border-radius: 999px; border: 1px solid var(--line); font-size: .8rem; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <h1 class="brand"><img src="/static/icon.svg" alt="" width="28" height="28"><span>HighGround <b>Ops</b></span></h1>
+    <a href="/" style="color: inherit">Resident view</a>
+  </header>
+  <main class="ops">
+    <p class="muted">For city crews and community organizations. Powered by Elasticsearch: ES|QL with LOOKUP JOIN for hotspots,
+      significant_terms for unusual activity, and ES|QL COMPLETION (Mistral) for neighborhood summaries.</p>
+    <div class="row">
+      <label for="hours">Window</label>
+      <select id="hours"><option value="3">3 hours</option><option value="6" selected>6 hours</option><option value="24">24 hours</option><option value="72">72 hours</option></select>
+      <button id="refresh" class="primary" type="button">Refresh</button>
+    </div>
+    <div class="grid">
+      <section class="card" aria-labelledby="h-over"><h2 id="h-over">Now</h2><div id="overview" aria-live="polite"></div></section>
+      <section class="card" aria-labelledby="h-unusual"><h2 id="h-unusual">Unusual right now</h2><div id="unusual" aria-live="polite"></div></section>
+      <section class="card" aria-labelledby="h-nh"><h2 id="h-nh">Neighborhood summary</h2>
+        <label for="nh" class="sr-only">Neighborhood</label><select id="nh"></select>
+        <div id="nhout" aria-live="polite"></div></section>
+    </div>
+    <section class="card" aria-labelledby="h-hot"><h2 id="h-hot">Flood hotspots (reports × block susceptibility)</h2><div id="hot" aria-live="polite"></div></section>
+  </main>
+  <script type="module" src="/static/ops.js"></script>
+</body>
+</html>

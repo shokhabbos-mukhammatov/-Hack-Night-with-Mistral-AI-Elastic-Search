@@ -88,6 +88,10 @@ function initMap() {
     const origin = location.origin;
     map.addSource("zones", { type: "vector", tiles: [`${origin}/tiles/zones/{z}/{x}/{y}.pbf`], minzoom: 10, maxzoom: 16 });
     map.addLayer({ id: "zones", type: "fill", source: "zones", "source-layer": "hits", paint: { "fill-color": "#2a7fff", "fill-opacity": 0.22 } });
+    // H3 density of recent reports, aggregated inside Elasticsearch (geohex grid in vector tiles)
+    map.addSource("density", { type: "vector", tiles: [`${origin}/tiles/density/{z}/{x}/{y}.pbf?hours=24`], minzoom: 9, maxzoom: 15 });
+    map.addLayer({ id: "density", type: "fill", source: "density", "source-layer": "aggs",
+      paint: { "fill-color": "#0a84ff", "fill-opacity": ["interpolate", ["linear"], ["get", "_count"], 1, 0.12, 5, 0.3, 20, 0.5] } });
     map.addSource("risk", { type: "vector", tiles: [`${origin}/tiles/risk/{z}/{x}/{y}.pbf`], minzoom: 10, maxzoom: 16 });
     map.addLayer({ id: "risk", type: "fill", source: "risk", "source-layer": "hits",
       paint: { "fill-color": ["match", ["get", "level_rank"], 1, "#b26a00", 2, "#c0392b", 3, "#6b2c91", "#2f7d4f"], "fill-opacity": 0.45 } });
@@ -175,10 +179,13 @@ async function ask(question) {
   const box = $("#answer");
   box.replaceChildren(h("p", { class: "muted" }, t("loading")));
   try {
-    const body = { question, lang: state.lang === "en" ? "auto" : state.lang, ...(state.point ? { lat: state.point.lat, lon: state.point.lon } : {}) };
+    const body = { question, lang: state.lang === "en" ? "auto" : state.lang, ...(state.point ? { lat: state.point.lat, lon: state.point.lon } : {}),
+      ...(state.conversation ? { conversation_id: state.conversation } : {}) };
     const a = await api("/api/ask", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    if (a.conversation_id) state.conversation = a.conversation_id;  // Mistral Conversations: follow-ups keep context
     box.replaceChildren(h("p", { class: "narr", lang: a.lang }, a.answer),
-      a.citations && a.citations.length ? h("ul", {}, a.citations.map((c) => h("li", {}, link(c.url, c.title || c.url)))) : null,
+      a.citations && a.citations.length ? h("ul", {}, a.citations.map((c) => h("li", {}, link(c.url, c.title || c.url), c.source === "web_search" ? h("span", { class: "tag" }, " web") : null))) : null,
+      a.web_sourced ? h("p", { class: "hint" }, "Parts of this answer come from a web search; check the linked sources.") : null,
       h("button", { class: "secondary", type: "button", onclick: () => speak(a.answer, a.lang) }, "🔊 ", t("read")));
   } catch (e) { box.replaceChildren(h("p", { class: "err", role: "alert" }, e.message)); }
 }
@@ -273,14 +280,14 @@ async function enterReplay() {
     sel.value = idx.dates.includes("2022-12-31") ? "2022-12-31" : idx.dates[idx.dates.length - 1];
     state.calibration = idx.calibration;
   }
-  if (state.map && state.map.getLayer("rcells")) ["risk", "reports"].forEach((l) => state.map.setLayoutProperty(l, "visibility", "none"));
+  if (state.map && state.map.getLayer("rcells")) ["risk", "reports", "density"].forEach((l) => state.map.setLayoutProperty(l, "visibility", "none"));
   await loadReplay(sel.value);
 }
 function exitReplay() {
   stopReplay();
   if (state.map && state.map.getLayer("rcells")) {
     ["rcells", "rreports"].forEach((l) => state.map.setLayoutProperty(l, "visibility", "none"));
-    ["risk", "reports"].forEach((l) => state.map.setLayoutProperty(l, "visibility", "visible"));
+    ["risk", "reports", "density"].forEach((l) => state.map.setLayoutProperty(l, "visibility", "visible"));
   }
 }
 async function loadReplay(date) {
@@ -373,5 +380,9 @@ function boot() {
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
   const params = new URLSearchParams(location.search);
   if (params.get("q")) { $("#q").value = params.get("q"); brief({ address: params.get("q") }); }
+  else if (params.get("cell") && window.h3 && h3.isValidCell(params.get("cell"))) {
+    const [lat, lon] = h3.cellToLatLng(params.get("cell"));
+    brief({ lat, lon });
+  }
 }
 boot();

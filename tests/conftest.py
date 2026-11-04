@@ -65,6 +65,18 @@ def test_es():
         client.transform.delete_transform(transform_id=f"{prefix}block-hourly", force=True)
     except Exception:  # noqa: BLE001
         pass
+    try:
+        for ds in client.indices.get_data_stream(name=f"{prefix}*")["data_streams"]:
+            client.indices.delete_data_stream(name=ds["name"])
+        for t in client.indices.get_index_template(name=f"{prefix}*")["index_templates"]:
+            client.indices.delete_index_template(name=t["name"])
+    except Exception:  # noqa: BLE001
+        pass
     names = [r["index"] for r in client.cat.indices(index=f"{prefix}*", format="json")]
     if names:
         client.indices.delete(index=",".join(names), ignore_unavailable=True)
+    for fn, kw in ((client.query_rules.delete_ruleset, {"ruleset_id": f"{prefix}guides-rules"}), (client.synonyms.delete_synonym, {"id": f"{prefix}flood-terms"})):
+        try:
+            fn(**kw)
+        except Exception:  # noqa: BLE001
+            pass

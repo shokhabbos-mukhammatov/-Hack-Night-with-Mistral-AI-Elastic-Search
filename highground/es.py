@@ -31,7 +31,8 @@ MAPPINGS: dict[str, dict] = {
             "location": GEO, "h3_9": KW, "address": {"type": "text", "fields": {"kw": KW}},
             "neighborhood": KW, "description": TEXT, "media_url": NOINDEX, "reporting_channel": KW,
             "seen_open311": BOOL, "seen_datasf": BOOL, "zone_100yr": BOOL, "slr24": BOOL,
-            "vision": {"properties": {"water_visible": BOOL, "confidence": FLOAT, "checked_at": DATE, "model": KW}},
+            "vision": {"properties": {"water_visible": BOOL, "confidence": FLOAT, "checked_at": DATE, "model": KW, "depth": KW, "drain_blocked": BOOL}},
+            "llm_checked_at": DATE, "llm_confidence": FLOAT,
         }
     },
     "flood-zones": {
@@ -63,7 +64,9 @@ MAPPINGS: dict[str, dict] = {
     },
     "guides": {
         "properties": {
-            "url": KW, "lang": KW, "title": TEXT, "section": TEXT, "body": TEXT, "source_type": KW, "page": {"type": "integer"},
+            "url": KW, "lang": KW, "title": {"type": "text", "analyzer": "hg_index", "search_analyzer": "hg_search"},
+            "section": {"type": "text", "analyzer": "hg_index", "search_analyzer": "hg_search"},
+            "body": {"type": "text", "analyzer": "hg_index", "search_analyzer": "hg_search"}, "source_type": KW, "page": {"type": "integer"},
             "fetched_at": DATE,
             # "content" becomes semantic_text (Mistral embeddings via the inference endpoint) when available
             "content": TEXT,
@@ -77,7 +80,7 @@ MAPPINGS: dict[str, dict] = {
     },
     "cell-profiles": {
         "properties": {
-            "cell": KW, "in_100yr": BOOL, "slr24": BOOL, "shoreline": BOOL, "reports_5y": {"type": "integer"},
+            "cell": KW, "h3_9": KW, "in_100yr": BOOL, "slr24": BOOL, "shoreline": BOOL, "reports_5y": {"type": "integer"},
             "storm_reports_5y": {"type": "integer"}, "storm_days_5y": {"type": "integer"}, "top_dates": KW,
             "centroid": GEO, "neighborhood": KW, "as_of": DATE,
         }
@@ -130,7 +133,27 @@ PIPELINE = "reports-enrich"
 ENRICH_POLICY = "zones-policy"
 TRANSFORM = "block-hourly"
 EMBED_ENDPOINT = "mistral-embed"
-CHAT_ENDPOINT = "mistral-chat"
+CHAT_ENDPOINT = "mistral-chat"  # chat_completion: Kibana/Agent Builder can use Mistral through it
+COMPLETION_ENDPOINT = "mistral-completion"  # completion: ES|QL COMPLETION
+E5_FALLBACK = ".multilingual-e5-small-elasticsearch"  # Elastic-hosted multilingual embeddings (needs ML / EIS)
+RERANK_ENDPOINT = ".rerank-v1-elasticsearch"  # Elastic Rerank
+SYNONYMS_SET = "flood-terms"
+QUERY_RULESET = "guides-rules"
+DATA_STREAMS = {"logs": "30d", "risk-history": "400d"}  # append-only time series with lifecycle retention
+INDEX_SETTINGS = {"cell-profiles": {"index.mode": "lookup"}}  # joinable from ES|QL (LOOKUP JOIN)
+
+# Multilingual flood vocabulary (en / es / zh / tl / vi): lexical search matches across languages even
+# without embeddings. Updateable in place via the Synonyms API.
+SYNONYMS = [
+    "sandbag, sandbags, sand bag, sacos de arena, saco de arena, 沙包, sako ng buhangin, bao cát",
+    "storm drain, catch basin, drain, desagüe, desague, alcantarilla, coladera, 雨水渠, 渠, kanal, cống thoát nước",
+    "flood, flooding, flooded, inundación, inundacion, inundaciones, inundado, 水浸, 水淹, baha, ngập, ngập lụt",
+    "flood insurance, seguro contra inundaciones, 水災保險, insurance ng baha, bảo hiểm lũ lụt",
+    "fallen tree, tree down, árbol caído, arbol caido, 塌樹, 倒樹, natumbang puno, cây đổ",
+    "alert, alerts, alerta, alertas, 警報, babala, cảnh báo",
+    "grant, subvención, subvencion, 資助, tulong, trợ cấp",
+    "report, reportar, 報告, iulat, báo cáo",
+]
 
 
 class ES:
@@ -172,10 +195,11 @@ class ES:
         if merge_fn:
             docs = self._merge_existing(index, docs, merge_fn)
         use_pipeline = self.ix(pipeline) if pipeline and self.pipeline_available() else None
+        op = "create" if index in DATA_STREAMS else "index"
         actions = []
         for d in docs:
             src = {k: v for k, v in d.items() if k != "_id"}
-            actions.append({"_op_type": "index", "_index": self.ix(index), "_id": d["_id"], "_source": src})
+            actions.append({"_op_type": op, "_index": self.ix(index), "_id": d["_id"], "_source": src})
         try:
             ok, _ = bulk(self.client.options(request_timeout=120), actions, pipeline=use_pipeline, refresh=refresh, chunk_size=1000)
         except BulkIndexError as exc:
@@ -270,12 +294,13 @@ class ES:
 def ensure_inference(es: ES) -> dict:
     """Mistral endpoints inside Elasticsearch: embeddings for semantic_text, chat for ES|QL COMPLETION."""
     cfg = es.cfg
-    out = {"embed": False, "chat": False}
+    out = {"embed": False, "chat": False, "completion": False}
     if not cfg.has_mistral:
         return out
     specs = [
         ("text_embedding", EMBED_ENDPOINT, cfg.model_embed, "embed"),
         ("chat_completion", CHAT_ENDPOINT, cfg.model_small, "chat"),
+        ("completion", COMPLETION_ENDPOINT, cfg.model_small, "completion"),
     ]
     for task, name, model, key in specs:
         eid = es.ix(name)
@@ -297,18 +322,123 @@ def ensure_inference(es: ES) -> dict:
     return out
 
 
-def ensure_indices(es: ES, semantic: bool = False) -> list[str]:
+def inference_works(es: ES, inference_id: str, task: str) -> bool:
+    """True if an endpoint exists AND can actually run here (e.g. Elastic-hosted models need ML/EIS)."""
+    try:
+        if task == "rerank":
+            es.client.inference.inference(inference_id=inference_id, task_type=task, input=["flood"], query="flood", timeout="20s")
+        else:
+            es.client.inference.inference(inference_id=inference_id, task_type=task, input=["flood"], timeout="20s")
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def semantic_inference_id(es: ES, mistral_embed: bool) -> str | None:
+    """semantic_text model: Mistral embeddings when configured, else Elastic's multilingual E5 if it can run."""
+    if mistral_embed:
+        return es.ix(EMBED_ENDPOINT)
+    if inference_works(es, E5_FALLBACK, "text_embedding"):
+        return E5_FALLBACK
+    return None
+
+
+def ensure_synonyms(es: ES) -> bool:
+    try:
+        es.client.synonyms.put_synonym(id=es.ix(SYNONYMS_SET), synonyms_set=[{"id": f"r{i}", "synonyms": r} for i, r in enumerate(SYNONYMS)])
+        return True
+    except ApiError as exc:
+        log.warning("synonyms set not created: %s", exc)
+        return False
+
+
+def _analysis(es: ES) -> dict:
+    return {
+        "filter": {"hg_syn": {"type": "synonym_graph", "synonyms_set": es.ix(SYNONYMS_SET), "updateable": True}},
+        "analyzer": {
+            "hg_index": {"type": "custom", "tokenizer": "standard", "filter": ["lowercase", "asciifolding"]},
+            "hg_search": {"type": "custom", "tokenizer": "standard", "filter": ["lowercase", "asciifolding", "hg_syn"]},
+        },
+    }
+
+
+def ensure_data_streams(es: ES) -> list[str]:
     created = []
+    for name, retention in DATA_STREAMS.items():
+        idx = es.ix(name)
+        props = dict(MAPPINGS[name]["properties"])
+        props.setdefault("@timestamp", DATE)
+        es.client.indices.put_index_template(
+            name=idx,
+            index_patterns=[idx],
+            data_stream={},
+            priority=500,
+            template={"lifecycle": {"data_retention": retention}, "mappings": {"properties": props}},
+        )
+        if not es.client.indices.exists(index=idx):
+            es.client.indices.create_data_stream(name=idx)
+            created.append(idx)
+    return created
+
+
+def ensure_indices(es: ES, semantic: bool | str | None = False) -> list[str]:
+    """semantic: inference id for guides.content (or True = Mistral endpoint); falsy = plain text."""
+    created = []
+    ensure_synonyms(es)
+    created += ensure_data_streams(es)
     for name, mapping in MAPPINGS.items():
         idx = es.ix(name)
+        if name in DATA_STREAMS:
+            continue
         if es.client.indices.exists(index=idx):
+            try:  # additive mapping changes apply in place (new fields only)
+                props = {k: v for k, v in mapping["properties"].items() if not (name == "guides" and k == "content")}
+                es.client.indices.put_mapping(index=idx, properties=props)
+            except ApiError as exc:
+                log.info("mapping update skipped for %s: %s", idx, str(exc)[:200])
             continue
         m = {"properties": dict(mapping["properties"])}
-        if name == "guides" and semantic:
-            m["properties"]["content"] = {"type": "semantic_text", "inference_id": es.ix(EMBED_ENDPOINT)}
-        es.client.indices.create(index=idx, mappings=m)
+        settings_ = dict(INDEX_SETTINGS.get(name, {}))
+        if name == "guides":
+            settings_["analysis"] = _analysis(es)
+            inf = es.ix(EMBED_ENDPOINT) if semantic is True else semantic
+            if inf:
+                m["properties"]["content"] = {"type": "semantic_text", "inference_id": inf}
+        es.client.indices.create(index=idx, mappings=m, settings=settings_ or None)
         created.append(idx)
     return created
+
+
+EMERGENCY_TERMS = [
+    "emergency", "trapped", "danger", "911", "drowning", "power line", "emergencia", "atrapado", "peligro",
+    "緊急", "危險", "被困", "emerhensiya", "khẩn cấp",
+]  # fmt: skip
+
+
+def ensure_query_rules(es: ES, pinned_by_lang: dict[str, list[str]]) -> bool:
+    """Query rules: emergency-style questions always surface 'call 911 / report to 311' guidance first,
+    in the reader's language (one pinned rule per language, English as the catch-all)."""
+    rules = []
+    for lang, ids in sorted(pinned_by_lang.items()):
+        rules.append({
+            "rule_id": f"emergency-first-{lang}",
+            "type": "pinned",
+            "criteria": [
+                {"type": "contains", "metadata": "query_string", "values": EMERGENCY_TERMS},
+                {"type": "exact", "metadata": "lang", "values": [lang]},
+            ],
+            "actions": {"ids": ids[:10]},
+        })  # fmt: skip
+    if "en" in pinned_by_lang:
+        rules.append({"rule_id": "emergency-first-any", "type": "pinned",
+                      "criteria": [{"type": "contains", "metadata": "query_string", "values": EMERGENCY_TERMS}],
+                      "actions": {"ids": pinned_by_lang["en"][:10]}})  # fmt: skip
+    try:
+        es.client.query_rules.put_ruleset(ruleset_id=es.ix(QUERY_RULESET), rules=rules)
+        return True
+    except ApiError as exc:
+        log.warning("query rules not created: %s", exc)
+        return False
 
 
 def ensure_enrich_and_pipeline(es: ES) -> bool:
@@ -404,8 +534,10 @@ def ensure_transform(es: ES) -> bool:
 
 def setup(es: ES) -> dict:
     inf = ensure_inference(es)
-    created = ensure_indices(es, semantic=inf["embed"])
-    return {"inference": inf, "created": created}
+    sem = semantic_inference_id(es, inf["embed"])
+    created = ensure_indices(es, semantic=sem)
+    return {"inference": inf, "semantic_model": sem, "created": created,
+            "rerank": inference_works(es, RERANK_ENDPOINT, "rerank")}  # fmt: skip
 
 
 def iter_bulk(es: ES, index: str, docs: Iterable[dict], pipeline: str | None = None, merge_fn=None, batch: int = 2000) -> int:

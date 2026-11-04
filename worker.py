@@ -97,6 +97,17 @@ def job_dispatch():
         log.info("dispatch: %s", stats)
 
 
+def job_llm_enrich():
+    """Mistral in the ingest path: classify Open311 free text, check 311 photos for visible water."""
+    if not leader() or not settings().has_mistral:
+        return
+    from highground import enrich_llm
+
+    a, b = enrich_llm.classify_reports(es()), enrich_llm.verify_photos(es())
+    if a or b:
+        log.info("llm enrich: classified=%s photos=%s", a, b)
+
+
 def job_nightly():
     if not leader():
         return
@@ -200,6 +211,7 @@ JOBS = {
     **{f"source:{n}": (job_source(n), SOURCES[n].interval_s) for n in SOURCES if n != "datasf"},
     "risk": (job_risk, 120),
     "dispatch": (job_dispatch, 15),
+    "llm_enrich": (job_llm_enrich, 180),
     "signals": (job_signals, 900),
     "apify_results": (job_apify_results, 60),
     "ops": (job_ops, 300),

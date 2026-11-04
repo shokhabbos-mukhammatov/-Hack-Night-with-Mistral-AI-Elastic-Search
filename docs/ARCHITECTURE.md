@@ -290,3 +290,13 @@ The cache key bounds Mistral cost by the **number of active cells × languages**
 - **Calibration:** `replay calibrate` grid-searches thresholds on 6 storm days, maximizing F0.5, with Dec 31, 2022 held out. Result: High = 2.0 (see `data/replay/calibration.json`).
 - **Archived weather fallback:** Open-Meteo's free tier is rate-limited per IP. `prepare` falls back to the SFO ASOS gauge (IEM) and records which source it used in each dataset's `sources`.
 - **Apify actors** (schemas checked): `apify/website-content-crawler` and `apify/reddit-scraper` (official, pay per post). Several guessed start URLs returned 404 and were removed; only verified URLs are crawled.
+
+- **Capability expansion (round 2):**
+  - **ES|QL `LOOKUP JOIN`**: `cell-profiles` is now a lookup-mode index.
+  - **ES|QL `COMPLETION`**: uses the `completion` task type; `chat_completion` is rejected.
+  - **`significant_terms`**: the background filter uses explicit timestamps, because `now` isn't cacheable.
+  - **Synonyms set and query rules**: one pinned rule per language. The index analyzer folds accents to match the search analyzer.
+  - **Data streams** with lifecycle retention.
+  - **Geohex `_mvt` aggregation tiles.**
+  - **Mistral Agent and Conversations** with guardrails and `web_search`. Function calls run in our own loop, because the SDK's `RunContext` updates the agent on every run.
+  - **Elastic Agent Builder ES|QL tools over MCP**: Kibana publishes them as `highground_*` under `?namespace=highground`. Creating agents in Agent Builder needs ES security, so local clusters with security off can register tools but not agents.

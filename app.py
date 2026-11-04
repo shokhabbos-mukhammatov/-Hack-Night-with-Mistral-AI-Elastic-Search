@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from highground import agent, alerts, fallback, report, tools
+from highground import agent, alerts, fallback, ops, report, tools
 from highground.briefing import build_briefing
 from highground.config import settings
 from highground.es import ES
@@ -196,6 +196,7 @@ class AskIn(BaseModel):
     lang: str | None = "auto"
     lat: float | None = None
     lon: float | None = None
+    conversation_id: str | None = Field(None, max_length=80, pattern=r"^[A-Za-z0-9_-]+$")
 
 
 @app.post("/api/ask")
@@ -208,7 +209,9 @@ def api_ask(request: Request, body: AskIn):
                 raise HTTPException(400, "Let's keep it about flooding, storms and city services.")
         except MistralUnavailable:
             pass
-    return agent.ask(es(), body.question, body.lang, body.lat, body.lon)
+    from highground.mistral_agent import converse
+
+    return converse(es(), body.question, body.lang, body.lat, body.lon, body.conversation_id)
 
 
 # ---------------------------------------------------------------- report / voice
@@ -296,6 +299,14 @@ TILE_LAYERS = {
 
 @app.get("/tiles/{layer}/{z}/{x}/{y}.pbf", include_in_schema=False)
 def tiles(layer: str, z: int, x: int, y: int, hours: int = Query(24, ge=1, le=168), zone: str = "100yr"):
+    if layer == "density" and 0 <= z <= 20:
+        # H3 (geohex) aggregation tiles straight from Elasticsearch: report density without shipping points
+        query = {"bool": {"filter": [{"range": {"requested_at": {"gte": f"now-{hours}h"}}}, {"terms": {"category": list(ops.FLOOD) + ["tree"]}}]}}
+        try:
+            data = es().mvt("hazard-reports", "location", z, x, y, query=query, grid_agg="geohex", grid_precision=6, grid_type="grid", size=0, track_total_hits=False)
+        except Exception:  # noqa: BLE001
+            return Response(status_code=204)
+        return Response(content=data, media_type="application/vnd.mapbox-vector-tile", headers={"Cache-Control": "public, max-age=60"})
     if layer not in TILE_LAYERS or not (0 <= z <= 20):
         raise HTTPException(404)
     index, field, fields = TILE_LAYERS[layer]
@@ -335,6 +346,46 @@ def list_risk(request: Request, min_level: Level = Level.elevated, size: int = Q
         "risk-cells", size=size, sort=[{"score": "desc"}], query={"range": {"level_rank": {"gte": min_level.rank}}}, _source=["cell", "level", "score", "centroid", "reasons", "as_of"]
     )
     return {"items": [h["_source"] for h in res["hits"]["hits"]]}
+
+
+# ---------------------------------------------------------------- city ops (ES|QL LOOKUP JOIN, significant_terms, COMPLETION)
+
+
+@app.get("/ops", include_in_schema=False)
+def ops_page():
+    return FileResponse(WEB / "ops.html", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/api/ops/hotspots")
+def api_hotspots(request: Request, hours: int = Query(6, ge=1, le=72), limit: int = Query(20, le=100)):
+    rate_limit(request)
+    return {"hours": hours, "items": ops.hotspots(es(), hours, limit)}
+
+
+@app.get("/api/ops/unusual")
+def api_unusual(request: Request, hours: int = Query(6, ge=1, le=72)):
+    rate_limit(request)
+    return ops.unusual(es(), hours=hours)
+
+
+@app.get("/api/ops/neighborhood/{name}")
+def api_neighborhood(request: Request, name: str, hours: int = Query(6, ge=1, le=72)):
+    rate_limit(request)
+    return ops.neighborhood(es(), name, hours)
+
+
+@app.get("/api/ops/overview")
+def api_ops_overview(request: Request):
+    rate_limit(request)
+    e = es()
+    levels = e.search("risk-cells", size=0, aggs={"l": {"terms": {"field": "level"}}})["aggregations"]["l"]["buckets"]
+    hoods = e.search("cell-profiles", size=0, aggs={"n": {"terms": {"field": "neighborhood", "size": 60, "order": {"_key": "asc"}}}})
+    return {
+        "risk_levels": {b["key"]: b["doc_count"] for b in levels},
+        "outbox": ops.outbox_stats(e),
+        "feeds": tools.latest_freshness(e),
+        "neighborhoods": [b["key"] for b in hoods["aggregations"]["n"]["buckets"]],
+    }
 
 
 # ---------------------------------------------------------------- replay / backtest

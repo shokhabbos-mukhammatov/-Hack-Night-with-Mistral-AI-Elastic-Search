@@ -52,7 +52,12 @@ def handle_text(es: ES, channel: str, handle: dict, text: str, lang: str | None 
         alerts.subscribe(es, channel, handle, hit["lat"], hit["lon"], label=hit["label"], lang=lang)
         b = build_briefing(es, hit["lat"], hit["lon"], lang=lang, label=hit["label"], narrate_with_llm=False)
         return _t(CONFIRM_TEXT, lang, place=hit["label"]) + "\n\n" + fallback.headline(b.risk.level, lang)
-    res = agent.ask(es, intent.get("question", text), lang=lang)
+    from highground.mistral_agent import converse, get_thread, put_thread, thread_key
+
+    tkey = thread_key(channel, key)
+    res = converse(es, intent.get("question", text), lang=lang, conversation_id=get_thread(es, tkey))
+    if res.get("conversation_id"):
+        put_thread(es, tkey, res["conversation_id"])
     reply = res["answer"]
     if res.get("citations"):
         reply += "\n" + res["citations"][0]["url"]

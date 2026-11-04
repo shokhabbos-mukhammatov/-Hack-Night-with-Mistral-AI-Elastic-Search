@@ -40,6 +40,30 @@ def cmd_setup(es: es_mod.ES) -> dict:
     return es_mod.setup(es)
 
 
+def cmd_migrate(es: es_mod.ES) -> dict:
+    """Rebuild derived indices whose settings changed (all recomputable): guides (synonym analyzer, semantic model),
+    cell-profiles (lookup mode for ES|QL LOOKUP JOIN), logs + risk-history (data streams with retention)."""
+    dropped = []
+    for name in ("guides", "cell-profiles"):
+        idx = es.ix(name)
+        if es.client.indices.exists(index=idx):
+            es.client.indices.delete(index=idx)
+            dropped.append(idx)
+    for name in es_mod.DATA_STREAMS:
+        idx = es.ix(name)
+        try:
+            es.client.indices.delete_data_stream(name=idx)
+            dropped.append(idx)
+        except Exception:  # noqa: BLE001 - not a data stream (older layout): drop the plain index
+            if es.client.indices.exists(index=idx):
+                es.client.indices.delete(index=idx)
+                dropped.append(idx)
+    out = {"dropped": dropped, "setup": es_mod.setup(es)}
+    out["profiles"] = {k: v for k, v in cmd_profiles(es).items() if k != "storm_days"}
+    out["guides"] = cmd_guides(es, local=True)
+    return out
+
+
 def cmd_layers(es: es_mod.ES) -> dict:
     out = {}
     with http_mod.client(timeout=180) as http:
@@ -106,7 +130,7 @@ def main(argv: list[str] | None = None) -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     ap = argparse.ArgumentParser(prog="highground.ingest")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for c in ("setup", "layers", "places", "profiles", "transform", "all"):
+    for c in ("setup", "migrate", "layers", "places", "profiles", "transform", "all"):
         sub.add_parser(c)
     b = sub.add_parser("backfill")
     b.add_argument("--years", type=float, default=5)
@@ -131,6 +155,8 @@ def main(argv: list[str] | None = None) -> None:
         }
     elif args.cmd == "setup":
         result = cmd_setup(es)
+    elif args.cmd == "migrate":
+        result = cmd_migrate(es)
     elif args.cmd == "layers":
         result = cmd_layers(es)
     elif args.cmd == "places":

@@ -1,0 +1,10 @@
+{
+  "name": "HighGround SF",
+  "short_name": "HighGround",
+  "description": "Block-level flood and storm risk for San Francisco, in your language.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f8fa",
+  "theme_color": "#0b4f6c",
+  "icons": [{ "src": "/static/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

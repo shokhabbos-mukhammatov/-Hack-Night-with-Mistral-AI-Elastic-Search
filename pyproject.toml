@@ -1,0 +1,23 @@
+[project]
+name = "highground"
+version = "0.1.0"
+description = "HighGround SF: block-level flood and storm-hazard copilot for San Francisco (Mistral + Elasticsearch)"
+requires-python = ">=3.12"
+readme = "README.md"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+extend-exclude = [".venv", "web"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]
+ignore = ["E501", "B008", "SIM105"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "integration: needs a running Elasticsearch at HG_ES_URL (skipped otherwise)",
+  "network: calls real public APIs (skipped unless HG_NETWORK_TESTS=1)",
+]
+addopts = "-q"

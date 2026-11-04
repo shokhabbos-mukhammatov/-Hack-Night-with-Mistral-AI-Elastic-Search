@@ -1,0 +1,177 @@
+{
+    "@context": [
+        "https://geojson.org/geojson-ld/geojson-context.jsonld",
+        {
+            "@version": "1.1",
+            "wx": "https://api.weather.gov/ontology#",
+            "@vocab": "https://api.weather.gov/ontology#"
+        }
+    ],
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.9f4618937fa09e3f130bac1fce97026e8c1fb0e9.001.1",
+            "type": "Feature",
+            "geometry": null,
+            "properties": {
+                "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.9f4618937fa09e3f130bac1fce97026e8c1fb0e9.001.1",
+                "@type": "wx:Alert",
+                "id": "urn:oid:2.49.0.1.840.0.9f4618937fa09e3f130bac1fce97026e8c1fb0e9.001.1",
+                "areaDesc": "San Francisco",
+                "geocode": {
+                    "SAME": [
+                        "006075"
+                    ],
+                    "UGC": [
+                        "CAZ006"
+                    ]
+                },
+                "affectedZones": [
+                    "https://api.weather.gov/zones/forecast/CAZ006"
+                ],
+                "references": [],
+                "sent": "2026-11-03T11:25:00-08:00",
+                "effective": "2026-11-03T11:25:00-08:00",
+                "onset": "2026-11-04T06:00:00-08:00",
+                "expires": "2026-11-03T22:00:00-08:00",
+                "ends": "2026-11-09T13:00:00-08:00",
+                "status": "Actual",
+                "messageType": "Alert",
+                "category": "Met",
+                "severity": "Minor",
+                "certainty": "Likely",
+                "urgency": "Expected",
+                "event": "Coastal Flood Advisory",
+                "sender": "w-nws.webmaster@noaa.gov",
+                "senderName": "NWS San Francisco CA",
+                "headline": "Coastal Flood Advisory issued November 3 at 11:25AM PST until November 9 at 1:00PM PST by NWS San Francisco CA",
+                "description": "* WHAT...For the Beach Hazards Statement, An increased risk for\nsneaker waves and strong rip currents. For the Coastal Flood\nAdvisory, Up to 1.6 ft of inundation above ground level is\npossible in low-lying areas near shorelines and tidal waterways.\n\n* WHERE...San Francisco County.\n\n* WHEN...For the Beach Hazards Statement, until 8 PM PST this\nevening. For the Coastal Flood Advisory, from 6 AM Wednesday\nto 1 PM PST Monday.\n\n* IMPACTS...High tides will result in flooding of low-lying\ninfrastructure, isolated road closures, and coastal erosion.\nRising tides will bring water and waves farther up the beach\nthan normal, restricting escape from beaches and coastal\nareas. Waves can sweep across the shoreline without warning,\npulling people into the sea from beaches, jetties, and rocks.\n\n* ADDITIONAL DETAILS...At the San Francisco tidal gauge, high tide\nis expected to be 1.0 ft above normal (6.8 ft MLLW) at 8:00 AM\nWednesday 11/4, 1.3 ft above normal (7.1 ft MLLW) at 8:35 AM\nThursday 11/5, 1.4 ft above normal (7.2 ft MLLW) at 9:08 AM\nFriday 11/6, 1.6 ft above normal (7.4 ft MLLW) at 9:38 AM\nSaturday 11/7, 1.6 ft above normal (7.4 ft MLLW) at 10:06 AM\nSunday 11/8, 1.6 ft above normal (7.4 ft MLLW) at 10:35 AM\nMonday 11/9. These predictions include up to 1.2 ft of surge\nthat will enhance the astronomical tide and flooding threat.\nHigh tide varies up to 90 minutes earlier or later along the\nPacific Coast and through the San Francisco Bay, respectively.",
+                "instruction": "If travel is required, allow extra time as some roads may be\nclosed. Do not drive around barricades or through water of\nunknown depth. Take the necessary actions to protect flood-prone\nproperty.\n\nStay off of jetties, piers, rocks, and other waterside\ninfrastructure. Remain out of the water to avoid hazardous surf\nand NEVER turn your back on the ocean. Monitor local weather,\nsurf and tide forecasts at www.weather.gov/mtr.",
+                "response": "Monitor",
+                "note": null,
+                "parameters": {
+                    "AWIPSidentifier": [
+                        "CFWMTR"
+                    ],
+                    "WMOidentifier": [
+                        "WHUS46 KMTR 031925"
+                    ],
+                    "NWSheadline": [
+                        "BEACH HAZARDS STATEMENT REMAINS IN EFFECT UNTIL 8 PM PST THIS EVENING... ...COASTAL FLOOD ADVISORY IN EFFECT FROM 6 AM WEDNESDAY TO 1 PM PST MONDAY"
+                    ],
+                    "BLOCKCHANNEL": [
+                        "EAS",
+                        "NWEM",
+                        "CMAS"
+                    ],
+                    "VTEC": [
+                        "/O.NEW.KMTR.CF.Y.0015.261104T1400Z-261109T2100Z/"
+                    ],
+                    "eventEndingTime": [
+                        "2026-11-09T13:00:00-08:00"
+                    ]
+                },
+                "scope": "Public",
+                "code": "IPAWSv1.0",
+                "language": "en-US",
+                "web": "http://www.weather.gov",
+                "eventCode": {
+                    "SAME": [
+                        "NWS"
+                    ],
+                    "NationalWeatherService": [
+                        "CFY"
+                    ]
+                }
+            }
+        },
+        {
+            "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.9f4618937fa09e3f130bac1fce97026e8c1fb0e9.001.2",
+            "type": "Feature",
+            "geometry": null,
+            "properties": {
+                "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.9f4618937fa09e3f130bac1fce97026e8c1fb0e9.001.2",
+                "@type": "wx:Alert",
+                "id": "urn:oid:2.49.0.1.840.0.9f4618937fa09e3f130bac1fce97026e8c1fb0e9.001.2",
+                "areaDesc": "San Francisco",
+                "geocode": {
+                    "SAME": [
+                        "006075"
+                    ],
+                    "UGC": [
+                        "CAZ006"
+                    ]
+                },
+                "affectedZones": [
+                    "https://api.weather.gov/zones/forecast/CAZ006"
+                ],
+                "references": [
+                    {
+                        "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.5ad8393bf4de5560e3c2cb85ff40c11c1f3a5f81.001.1",
+                        "identifier": "urn:oid:2.49.0.1.840.0.5ad8393bf4de5560e3c2cb85ff40c11c1f3a5f81.001.1",
+                        "sender": "w-nws.webmaster@noaa.gov",
+                        "sent": "2026-11-02T05:08:00-08:00"
+                    }
+                ],
+                "sent": "2026-11-03T11:25:00-08:00",
+                "effective": "2026-11-03T11:25:00-08:00",
+                "onset": "2026-11-03T11:25:00-08:00",
+                "expires": "2026-11-03T22:00:00-08:00",
+                "ends": "2026-11-03T20:00:00-08:00",
+                "status": "Actual",
+                "messageType": "Update",
+                "category": "Met",
+                "severity": "Moderate",
+                "certainty": "Likely",
+                "urgency": "Expected",
+                "event": "Beach Hazards Statement",
+                "sender": "w-nws.webmaster@noaa.gov",
+                "senderName": "NWS San Francisco CA",
+                "headline": "Beach Hazards Statement issued November 3 at 11:25AM PST until November 3 at 8:00PM PST by NWS San Francisco CA",
+                "description": "* WHAT...For the Beach Hazards Statement, An increased risk for\nsneaker waves and strong rip currents. For the Coastal Flood\nAdvisory, Up to 1.6 ft of inundation above ground level is\npossible in low-lying areas near shorelines and tidal waterways.\n\n* WHERE...San Francisco County.\n\n* WHEN...For the Beach Hazards Statement, until 8 PM PST this\nevening. For the Coastal Flood Advisory, from 6 AM Wednesday\nto 1 PM PST Monday.\n\n* IMPACTS...High tides will result in flooding of low-lying\ninfrastructure, isolated road closures, and coastal erosion.\nRising tides will bring water and waves farther up the beach\nthan normal, restricting escape from beaches and coastal\nareas. Waves can sweep across the shoreline without warning,\npulling people into the sea from beaches, jetties, and rocks.\n\n* ADDITIONAL DETAILS...At the San Francisco tidal gauge, high tide\nis expected to be 1.0 ft above normal (6.8 ft MLLW) at 8:00 AM\nWednesday 11/4, 1.3 ft above normal (7.1 ft MLLW) at 8:35 AM\nThursday 11/5, 1.4 ft above normal (7.2 ft MLLW) at 9:08 AM\nFriday 11/6, 1.6 ft above normal (7.4 ft MLLW) at 9:38 AM\nSaturday 11/7, 1.6 ft above normal (7.4 ft MLLW) at 10:06 AM\nSunday 11/8, 1.6 ft above normal (7.4 ft MLLW) at 10:35 AM\nMonday 11/9. These predictions include up to 1.2 ft of surge\nthat will enhance the astronomical tide and flooding threat.\nHigh tide varies up to 90 minutes earlier or later along the\nPacific Coast and through the San Francisco Bay, respectively.",
+                "instruction": "If travel is required, allow extra time as some roads may be\nclosed. Do not drive around barricades or through water of\nunknown depth. Take the necessary actions to protect flood-prone\nproperty.\n\nStay off of jetties, piers, rocks, and other waterside\ninfrastructure. Remain out of the water to avoid hazardous surf\nand NEVER turn your back on the ocean. Monitor local weather,\nsurf and tide forecasts at www.weather.gov/mtr.",
+                "response": "Avoid",
+                "note": null,
+                "parameters": {
+                    "AWIPSidentifier": [
+                        "CFWMTR"
+                    ],
+                    "WMOidentifier": [
+                        "WHUS46 KMTR 031925"
+                    ],
+                    "NWSheadline": [
+                        "BEACH HAZARDS STATEMENT REMAINS IN EFFECT UNTIL 8 PM PST THIS EVENING... ...COASTAL FLOOD ADVISORY IN EFFECT FROM 6 AM WEDNESDAY TO 1 PM PST MONDAY"
+                    ],
+                    "BLOCKCHANNEL": [
+                        "EAS",
+                        "NWEM",
+                        "CMAS"
+                    ],
+                    "VTEC": [
+                        "/O.CON.KMTR.BH.S.0022.000000T0000Z-261104T0400Z/"
+                    ],
+                    "eventEndingTime": [
+                        "2026-11-03T20:00:00-08:00"
+                    ],
+                    "expiredReferences": [
+                        "w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.e9432f1dcdbbab5fbf8e7e40f0ef4f817522feb9.001.2,2026-11-01T17:47:00-08:00 w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.4b2bbabee52fa5dba583b63ad0113a4b255ed93b.001.2,2026-11-01T14:25:00-08:00 w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.3e16058c074608f49dd4777b74bae1056ca6fa99.001.2,2026-11-01T01:07:00-07:00 w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.bf554610ca1cd55484fe769281e81ea82495bf5c.001.2,2026-11-01T01:05:00-07:00 w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.190d46f51b19f7c0c2a47429e68034200188deb9.002.1,2026-10-31T17:58:00-07:00"
+                    ]
+                },
+                "scope": "Public",
+                "code": "IPAWSv1.0",
+                "language": "en-US",
+                "web": "http://www.weather.gov",
+                "eventCode": {
+                    "SAME": [
+                        "NWS"
+                    ],
+                    "NationalWeatherService": [
+                        "BHS"
+                    ]
+                }
+            }
+        }
+    ],
+    "title": "Current watches, warnings, and advisories for 37.7749 N, 122.4194 W",
+    "updated": "2026-11-03T23:16:00+00:00"
+}

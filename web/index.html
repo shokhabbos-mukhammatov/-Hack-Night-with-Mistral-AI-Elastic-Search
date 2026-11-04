@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>HighGround SF</title>
+  <meta name="description" content="Is your San Francisco block going to flood? Live, block-level flood and storm risk with what to do, in your language.">
+  <meta name="theme-color" content="#0b4f6c">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <a class="skip" href="#panel">Skip to briefing</a>
+  <header class="top">
+    <h1 class="brand">
+      <img src="/static/icon.svg" alt="" width="28" height="28">
+      <span>HighGround <b>SF</b></span>
+    </h1>
+    <label class="lang">
+      <span class="sr-only" data-i18n="language">Language</span>
+      <select id="lang" aria-label="Language">
+        <option value="en">English</option>
+        <option value="es">Español</option>
+        <option value="zh">中文</option>
+        <option value="tl">Filipino</option>
+        <option value="vi">Tiếng Việt</option>
+        <option value="ru">Русский</option>
+      </select>
+    </label>
+  </header>
+
+  <main class="layout">
+    <section id="panel" class="panel" aria-label="HighGround controls">
+      <nav class="tabs" role="tablist" aria-label="Sections">
+        <button role="tab" id="tab-brief" aria-controls="view-brief" aria-selected="true" data-i18n="tab_brief">My block</button>
+        <button role="tab" id="tab-ask" aria-controls="view-ask" aria-selected="false" tabindex="-1" data-i18n="tab_ask">Ask</button>
+        <button role="tab" id="tab-report" aria-controls="view-report" aria-selected="false" tabindex="-1" data-i18n="tab_report">Report</button>
+        <button role="tab" id="tab-alerts" aria-controls="view-alerts" aria-selected="false" tabindex="-1" data-i18n="tab_alerts">Alerts</button>
+        <button role="tab" id="tab-replay" aria-controls="view-replay" aria-selected="false" tabindex="-1" data-i18n="tab_replay">Storm replay</button>
+      </nav>
+
+      <!-- BRIEFING -->
+      <div id="view-brief" role="tabpanel" aria-labelledby="tab-brief" class="view">
+        <form id="search" class="search" autocomplete="off">
+          <label for="q" data-i18n="where">Where are you?</label>
+          <div class="row">
+            <input id="q" name="q" type="search" inputmode="search" placeholder="17th and Folsom" required minlength="2" maxlength="200" aria-describedby="q-help">
+            <button type="submit" class="primary" data-i18n="check">Check</button>
+          </div>
+          <p id="q-help" class="hint" data-i18n="where_help">An address or an intersection in San Francisco.</p>
+          <button type="button" id="locate" class="link" data-i18n="use_location">Use my location</button>
+        </form>
+        <div id="brief" class="card" aria-live="polite" aria-busy="false">
+          <p class="muted" data-i18n="intro">See if your block is likely to flood or have storm hazards now, why, and what to do. Data: SF311, NWS, NOAA, SFPUC flood maps, CHP.</p>
+        </div>
+      </div>
+
+      <!-- ASK -->
+      <div id="view-ask" role="tabpanel" aria-labelledby="tab-ask" class="view" hidden>
+        <form id="ask" class="stack">
+          <label for="question" data-i18n="ask_label">Ask about flooding, storms or city help</label>
+          <textarea id="question" rows="3" maxlength="600" required placeholder="¿Dónde consigo sacos de arena?"></textarea>
+          <div class="row">
+            <button type="submit" class="primary" data-i18n="ask_btn">Ask</button>
+            <button type="button" id="mic" class="secondary" aria-pressed="false"><span aria-hidden="true">🎤</span> <span data-i18n="speak">Speak</span></button>
+          </div>
+        </form>
+        <div id="answer" class="card" aria-live="polite"></div>
+      </div>
+
+      <!-- REPORT -->
+      <div id="view-report" role="tabpanel" aria-labelledby="tab-report" class="view" hidden>
+        <form id="report" class="stack">
+          <p class="muted" data-i18n="report_intro">Take a photo of flooding, a clogged drain or a fallen tree. We draft the 311 report; you confirm before anything is sent.</p>
+          <label for="photo" data-i18n="photo">Photo (optional)</label>
+          <input id="photo" name="photo" type="file" accept="image/*" capture="environment">
+          <label for="rtext" data-i18n="what_see">What do you see?</label>
+          <textarea id="rtext" name="text" rows="2" maxlength="1000" placeholder="Water up to the curb at the corner, drain is covered in leaves"></textarea>
+          <p id="rloc" class="hint" data-i18n="report_loc">Location: use “My block” or your location first.</p>
+          <button type="submit" class="primary" data-i18n="draft">Draft 311 report</button>
+        </form>
+        <div id="draft" class="card" aria-live="polite"></div>
+      </div>
+
+      <!-- ALERTS -->
+      <div id="view-alerts" role="tabpanel" aria-labelledby="tab-alerts" class="view" hidden>
+        <form id="subscribe" class="stack">
+          <p class="muted" data-i18n="alerts_intro">Get a message when flood risk near your place rises. Not an official alert service.</p>
+          <label for="saddr" data-i18n="place">Place</label>
+          <input id="saddr" type="text" maxlength="200" placeholder="17th and Folsom" required>
+          <fieldset>
+            <legend data-i18n="how">How should we reach you?</legend>
+            <label><input type="radio" name="channel" value="webpush" checked> <span data-i18n="ch_push">Notifications on this device</span></label>
+            <label><input type="radio" name="channel" value="telegram"> Telegram</label>
+            <label><input type="radio" name="channel" value="imessage"> iMessage</label>
+          </fieldset>
+          <label for="phone" class="phone" hidden data-i18n="phone">iPhone number</label>
+          <input id="phone" class="phone" type="tel" inputmode="tel" autocomplete="tel" hidden placeholder="+1 415 555 0100">
+          <label for="minlevel" data-i18n="when">Alert me at</label>
+          <select id="minlevel">
+            <option value="elevated" data-i18n="lv_elevated">Elevated risk</option>
+            <option value="high" selected data-i18n="lv_high">High risk</option>
+            <option value="severe" data-i18n="lv_severe">Severe risk</option>
+          </select>
+          <button type="submit" class="primary" data-i18n="subscribe">Turn on alerts</button>
+        </form>
+        <div id="subresult" class="card" aria-live="polite"></div>
+        <p class="hint">AlertSF (official): text your ZIP code to 888-777.</p>
+      </div>
+
+      <!-- REPLAY -->
+      <div id="view-replay" role="tabpanel" aria-labelledby="tab-replay" class="view" hidden>
+        <p class="muted" data-i18n="replay_intro">Replay a real storm hour by hour, using only data that existed at each moment: rain, tide, NWS warnings and every 311 report at its true time.</p>
+        <div class="row">
+          <label for="rdate" class="sr-only">Storm day</label>
+          <select id="rdate"></select>
+          <button type="button" id="rplay" class="primary" aria-pressed="false" data-i18n="play">Play</button>
+        </div>
+        <label for="rslider" class="sr-only">Time of day</label>
+        <input id="rslider" type="range" min="0" max="95" value="0" step="1">
+        <div id="rclock" class="clock" aria-live="off">00:00</div>
+        <div id="rstats" class="card" aria-live="polite"></div>
+        <div class="phone-mock" aria-label="Alerts a subscriber would have received">
+          <div class="phone-top">📱 <span data-i18n="phone_title">Alerts for</span> <b id="rplace">17th &amp; Folsom</b></div>
+          <ol id="rmsgs" class="msgs"></ol>
+        </div>
+        <details class="card">
+          <summary data-i18n="how_well">How well would it have worked?</summary>
+          <div id="rbacktest"></div>
+        </details>
+      </div>
+
+      <footer class="foot">
+        <p id="disclaimer" class="hint">HighGround is not an official alert service. In an emergency call 911.</p>
+        <p class="hint"><a href="/status">System status</a> · <a href="https://github.com/shokhabbos-mukhammatov/-Hack-Night-with-Mistral-AI-Elastic-Search">Source</a> · Mistral AI + Elasticsearch</p>
+      </footer>
+    </section>
+
+    <div class="mapwrap">
+      <div id="map" role="region" aria-label="Map of flood zones, risk and reports. The same information is listed in the briefing."></div>
+      <div class="legend" aria-hidden="true">
+        <span><i class="sw low"></i>Low</span><span><i class="sw elevated"></i>Elevated</span><span><i class="sw high"></i>High</span><span><i class="sw severe"></i>Severe</span><span><i class="sw zone"></i>100-yr flood zone</span><span><i class="dot"></i>311 report</span>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/h3-js@4.1.0/dist/h3-js.umd.js"></script>
+  <script src="/static/app.js" type="module"></script>
+</body>
+</html>

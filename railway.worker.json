@@ -1,0 +1,9 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": { "builder": "DOCKERFILE", "dockerfilePath": "Dockerfile" },
+  "deploy": {
+    "startCommand": "python worker.py",
+    "numReplicas": 1,
+    "restartPolicyType": "ALWAYS"
+  }
+}
